@@ -69,12 +69,12 @@ export default function Table() {
       }
     });
     acoList.forEach((aco) => {
-      if (aco.Report_WI === "1") {
-        aco.method = "Web Interface";
-      } else if (aco.Report_eCQM === "1") {
+      if (aco.Report_eCQM === "1") {
         aco.method = "eCQM";
       } else if (aco.Report_CQM === "1") {
         aco.method = "MIPS CQM";
+      } else if (aco.Report_WI === "1") {
+        aco.method = "Web Interface";
       } else {
         aco.method = "NA";
       }
