@@ -1,0 +1,15 @@
+ACOs: aco_id,
+aco_name,
+aco_address,
+aco_public_reporting_website,
+aco_exec_name,aco_exec_email,
+aco_exec_phone,
+aco_public_name,
+aco_public_email,
+aco_public_phone,
+aco_compliance_contact_name,
+aco_medical_director_name,
+
+Performance Data:
+ACO_ID,ACO_Name,ACO_State,Risk_Model,N_AB,Sav_Rate,MinSavPerc,BnchmkMinExp,GenSaveLoss,DisAdj,EarnSaveLoss,Report_WI,Report_eCQM,Report_CQM,Report_Inc,QualScore,MaxShareRate,FinalShareRate,N_PCP,
+N_Spec,QualityID_001_WI,QualityID_001_eCQM-CQM,QualityID_236_WI,QualityID_236_eCQM-CQM,QualityID_134_WI,QualityID_134_eCQM-CQM,
