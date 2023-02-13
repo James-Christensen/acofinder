@@ -70,7 +70,7 @@ export default function Table() {
     });
     acoList.forEach((aco) => {
       if (aco.Report_eCQM === "1") {
-        aco.method = "eCQM";
+        aco.method = "ECQM";
       } else if (aco.Report_CQM === "1") {
         aco.method = "MIPS CQM";
       } else if (aco.Report_WI === "1") {
