@@ -3,7 +3,6 @@ import axios from "axios";
 import { Link } from "react-router-dom";
 import { OrgUrl, PerformanceUrl } from "../context/ursl";
 import { acoMembers } from "../context/acoMemberData";
-
 const _ = require("lodash");
 
 export default function Table() {
@@ -14,28 +13,10 @@ export default function Table() {
   const [sortPanel, setSortPanel] = useState(false);
   const [sortSavings, setSortSavings] = useState(false);
   const [sortReporting, setSortReporting] = useState(false);
-  const [oldACOS, setOldACOS] = useState([]);
-  const [selectValue, setSelect] = useState(true);
-  const [display, setDisplay] = useState([]);
 
   useEffect(() => {
     getList();
   }, []);
-
-  const filterRegion = (region) => {
-    return org.filter((aco) =>
-      region.includes(aco.aco_address.slice(-9).slice(0, 2))
-    );
-  };
-
-  const handleSort = () => {
-    if (selectValue === true) {
-      setDisplay(oldACOS);
-    } else {
-      setDisplay(org);
-    }
-    setSelect(!selectValue)
-  };
 
   const getList = async () => {
     const [orgResponse, performanceResponse] = await Promise.all([
@@ -89,7 +70,7 @@ export default function Table() {
     });
     acoList.forEach((aco) => {
       if (aco.Report_eCQM === "1") {
-        aco.method = "eCQM";
+        aco.method = "ECQM";
       } else if (aco.Report_CQM === "1") {
         aco.method = "MIPS CQM";
       } else if (aco.Report_WI === "1") {
@@ -100,8 +81,6 @@ export default function Table() {
     });
 
     setOrg(Object.values(acoList));
-    setDisplay(Object.values(acoList));
-    setOldACOS(org.filter((aco) => aco.N_AB !== undefined));
     setloading(false);
   };
 
@@ -110,7 +89,7 @@ export default function Table() {
       window.open(string, "_blank");
   };
 
-  let sortedACOs = [...display].sort((aco1, aco2) =>
+  let sortedACOs = [...org].sort((aco1, aco2) =>
     aco1.aco_address.slice(-9, -7) < aco2.aco_address.slice(-9, -7)
       ? -1
       : aco1.aco_address.slice(-9, -7) > aco2.aco_address.slice(-9, -7)
@@ -118,64 +97,64 @@ export default function Table() {
       : 0
   );
 
-  let sortedNameACOs = [...display].sort((aco1, aco2) =>
+  let sortedNameACOs = [...org].sort((aco1, aco2) =>
     aco1.aco_name < aco2.aco_name ? -1 : aco1.aco_name > aco2.aco_name ? 1 : 0
   );
-  let sortedPanelACOs = [...display].sort((aco1, aco2) =>
+  let sortedPanelACOs = [...org].sort((aco1, aco2) =>
     aco1.panel < aco2.panel ? -1 : aco1.panel > aco2.panel ? 1 : 0
   );
 
-  let sortedSavingsACOs = [...display].sort((aco1, aco2) =>
+  let sortedSavingsACOs = [...org].sort((aco1, aco2) =>
     aco1.savings < aco2.savings ? -1 : aco1.savings > aco2.savings ? 1 : 0
   );
-  let sortedReportingACOs = [...display].sort((aco1, aco2) =>
+  let sortedReportingACOs = [...org].sort((aco1, aco2) =>
     aco1.method < aco2.method ? -1 : aco1.method > aco2.method ? 1 : 0
   );
 
   const handleStateSort = () => {
     if (sortState === false) {
-      setDisplay(sortedACOs);
+      setOrg(sortedACOs);
     } else {
-      setDisplay(sortedACOs.reverse());
+      setOrg(sortedACOs.reverse());
     }
     setStateSort(!sortState);
   };
 
   const handleNameSort = () => {
     if (sortName === false) {
-      setDisplay(sortedNameACOs);
+      setOrg(sortedNameACOs);
     } else {
-      setDisplay(sortedNameACOs.reverse());
+      setOrg(sortedNameACOs.reverse());
     }
     setSortName(!sortName);
   };
   const handlePanelSort = () => {
     if (sortPanel === false) {
-      setDisplay(sortedPanelACOs);
+      setOrg(sortedPanelACOs);
     } else {
-      setDisplay(sortedPanelACOs.reverse());
+      setOrg(sortedPanelACOs.reverse());
     }
     setSortPanel(!sortPanel);
   };
 
   const handleSavingsSort = () => {
     if (sortSavings === false) {
-      setDisplay(sortedSavingsACOs);
+      setOrg(sortedSavingsACOs);
     } else {
-      setDisplay(sortedSavingsACOs.reverse());
+      setOrg(sortedSavingsACOs.reverse());
     }
     setSortSavings(!sortSavings);
   };
   const handleReportingSort = () => {
     if (sortReporting === false) {
-      setDisplay(sortedReportingACOs);
+      setOrg(sortedReportingACOs);
     } else {
-      setDisplay(sortedReportingACOs.reverse());
+      setOrg(sortedReportingACOs.reverse());
     }
     setSortReporting(!sortReporting);
   };
 
-  const tableRows = display.map((i) => (
+  const tableRows = org.map((i) => (
     <tr key={i.aco_id} className="hover text-center border-b border-info">
       <td className="w-2 px-5">{i.aco_id}</td>
       <td className="w-2 px-5">
@@ -214,26 +193,13 @@ export default function Table() {
 
   return (
     <>
-      <div className="container mx-auto block justify-center ">
-        <h1 className="text-3xl font-bold text-center text-secondary -mt-16 mb-6">
-          All 2023 ACO's
-        </h1>
-        <div className="flex justify-end mx-auto w-4/5">
-          <div className="form-control sm:w-1/2 lg:w-1/4 w-4/5">
-            <label className="label cursor-pointer">
-              <span className="label-text ">Remove ACOs Missing 2021 Data</span>
-              <input
-                type="checkbox"
-                checked={selectValue}
-                className="checkbox checkbox-primary "
-                onChange={handleSort}
-              />
-            </label>
-          </div>
-        </div>
-      </div>
-      <div className="flex mx-auto justify-center flex-col align-middle text-center w-4/5 h-full">
-        <div className="container overflow-display overscroll-contain pr-0 border-info rounded-l-md border overflow-y-scroll h-96">
+      <h1 className="text-4xl font-bold text-center text-secondary -mt-16 mb-6">
+        {" "}
+        All 2023 ACO's
+      </h1>
+
+      <div className="flex mx-auto justify-center flex-col align-middle text-center w-fit h-full">
+        <div className="z-50	container overflow-display overscroll-contain pr-0 border-info rounded-l-md border overflow-y-scroll h-96">
           <table className="table table-compact table-fixed text-center overflow-scroll	">
             <thead className="sticky top-0">
               <tr className="border-b border-info text-primary-content">
