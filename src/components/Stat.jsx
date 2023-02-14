@@ -3,7 +3,7 @@ import { FaChartLine } from "react-icons/fa";
 
 export default function Stat({ statValue, title, statDesc, icon }) {
   return (
-    <div className="stats shadow my-4 mx-5 hover:shadow-lg hover:shadow-primary w-1/5">
+    <div className="stats shadow my-4 hover:shadow-lg hover:shadow-primary w-full">
       <div className="stat">
         <div className="stat-figure text-primary">{icon}</div>
         <div className="stat-title text-left">{title}</div>
