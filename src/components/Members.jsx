@@ -13,15 +13,15 @@ export default function Members({ members }) {
     </tr>
   ));
   return (
-    <div className="collapse justify-end -mt-8 pt-0">
+    <div className="collapse justify-end w-full -mt-8 pt-0">
       <input
         type="checkbox"
         className="peer"
         value={collapse}
         onClick={() => setCollapse(!collapse)}
       />
-      <div className="collapse-title text-primary-content text-right text-sm w-1/2 mx-auto flex justify-end ">
-        <p className="mr-5 text-md align-middle	">
+      <div className="my-5 collapse-title text-primary-content text-right text-sm w-full mx-auto flex justify-start sm:justify-end ">
+        <p className="mr-5 text-sm align-middle	">
           {collapse === true ? "Hide" : "Show"} Members:
         </p>
         {collapse === true ? (
@@ -30,7 +30,7 @@ export default function Members({ members }) {
           <FaChevronCircleDown className="mr-0 mt-1 text-md align-middle	" />
         )}
       </div>
-      <div className="flex mx-auto justify-center flex-col align-middle text-center w-1/2 h-auto collapse-content">
+      <div className="flex mx-auto justify-center flex-col align-middle text-center w-5/6 h-auto collapse-content">
         <div className="container overflow-display overscroll-contain pr-0 border-info rounded-l-md border overflow-auto h-96">
           <table className="table table-fixed text-center overflow-scroll w-full	">
             <thead className="sticky top-0 w-full">
@@ -57,3 +57,4 @@ export default function Members({ members }) {
     </div>
   );
 }
+
