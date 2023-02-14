@@ -8,20 +8,20 @@ import {
 } from "react-icons/fa";
 
 export default function PerformanceData({ performance }) {
-
   const earned =
     performance[0].EarnSaveLoss.length > 8
       ? `${performance[0].EarnSaveLoss.slice(0, 3).replace(",", ".")} m`
-      :  performance[0].EarnSaveLoss.length < 3 ?  0
+      : performance[0].EarnSaveLoss.length < 3
+      ? 0
       : `${performance[0].EarnSaveLoss.slice(0, 3)} k`;
-const generated =
-  performance[0].GenSaveLoss.length > 8
-    ? `${performance[0].GenSaveLoss.slice(0, 3).replace(",", ".")} m`
-    : `${performance[0].GenSaveLoss.slice(0, 3)} k`;
+  const generated =
+    performance[0].GenSaveLoss.length > 8
+      ? `${performance[0].GenSaveLoss.slice(0, 3).replace(",", ".")} m`
+      : `${performance[0].GenSaveLoss.slice(0, 3)} k`;
 
   return (
     <div className="w-full">
-      <div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 ">
         <Stat
           title={"Risk Model:"}
           statValue={performance[0].Risk_Model}
@@ -57,7 +57,7 @@ const generated =
       </div>
       <p>
         2021 Submission Method:{" "}
-        {performance[0].Report_CQM === '1'
+        {performance[0].Report_CQM === "1"
           ? "MIPS CQM"
           : performance[0].Report_eCQM === "1"
           ? "eCQM"
