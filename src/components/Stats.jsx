@@ -5,7 +5,7 @@ export default function Stats({ members, patients, arr }) {
 
   return (
     <>
-      <div className="stats shadow">
+      <div className="stats stats-vertical sm:stats-horizontal shadow">
         <div className="stat">
           <div className="stat-figure text-accent">
             <FaHospital className="my-2 text-4xl" />
