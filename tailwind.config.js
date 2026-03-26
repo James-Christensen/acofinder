@@ -2,8 +2,6 @@
 module.exports = {
   content: [
     "./src/**/*.{js,jsx,ts,tsx}",
-    "./src/**/*.{html,js}",
-    "./node_modules/tw-elements/dist/js/**/*.js",
   ],
   plugins: [require("daisyui")],
   daisyui: {
@@ -11,27 +9,15 @@ module.exports = {
       "light",
       "dark",
       "cupcake",
-      "halloween",
-      "garden",
-      "forest",
-      "lofi",
-      "luxury",
-      "cmyk",
       "business",
-      "lemonade",
+      "forest",
       "night",
       "coffee",
       "winter",
     ],
-  },
-  daisyui: {
     styled: true,
-    themes: true,
     base: true,
     utils: true,
-    logs: true,
-    rtl: false,
-    prefix: "",
     darkTheme: "dark",
   },
 };

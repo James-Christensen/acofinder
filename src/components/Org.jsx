@@ -1,133 +1,244 @@
-import { React, useEffect, useState } from "react";
+import React, { useContext, useState, useMemo } from "react";
 import { useParams } from "react-router-dom";
-import axios from "axios";
+import ACOContext from "../context/context";
 import Stats from "./Stats";
 import Members from "./Members";
 import Contact from "./Contact";
 import PerformanceData from "./PerformanceData";
-import { FaUser, FaUserTie, FaUserNurse, FaUserMd } from "react-icons/fa";
-const _ = require("lodash");
+import QualityBreakdown from "./QualityBreakdown";
+import ProviderComposition from "./ProviderComposition";
+import YearOverYear from "./YearOverYear";
+import NPILookup from "./NPILookup";
+import PenaltyRiskCalculator from "./PenaltyRiskCalculator";
+import { FaUser, FaUserTie, FaUserNurse, FaUserMd, FaCopy, FaCheck } from "react-icons/fa";
+import { openInNewTab, calculateARR } from "../utils/helpers";
 
 export default function Org() {
-  const [aco, setAcoData] = useState([]);
-  const [members, setMembers] = useState([]);
-  const [performance, setPerformance] = useState();
-  const [loading, setloading] = useState(true);
-  const [has2021Data, setHas2021Data] = useState(false);
-
-  const placeholderData = [{ N_AB: 709 }];
-
   const { id } = useParams();
-  const acoURL = `https://data.cms.gov/data-api/v1/dataset/ea96c3ef-0dcb-4549-9866-03f087e81a5d//data?keyword=${id}`;
-  const perURL = `https://data.cms.gov/data-api/v1/dataset/bd6b766f-6fa3-43ae-8e9a-319da31dc374/data?column=%22ACO_ID%22%2C%22Risk_Model%22%2C%22N_AB%22%2C%22Sav_Rate%22%2C%22MinSavPerc%22%2C%22GenSaveLoss%22%2C%22EarnSaveLoss%22%2C%22Report_WI%22%2C%22Report_eCQM%22%2C%22Report_CQM%22%2C%22Met_QPS%22%2C%22QualScore%22%2C%22FinalShareRate%22%2C%22N_PCP%22%2C%22N_Spec%22%2C%22N_NP%22%2C%22N_PA%22%2C%22QualityID_134_eCQMCQM%22%2C%22QualityID_134_WI%22%2C%22QualityID_001_WI%22%2C%22QualityID_001_eCQMCQM%22%2C%22QualityID_236_WI%22%2C%22QualityID_236_eCQMCQM%22%2C
-&keyword=${id}`;
-  const memberURL = `https://data.cms.gov/data-api/v1/dataset/fd907586-71e8-4128-ad95-801ee1f4f6f0/data?column=%22par_lbn%22%2C%22aco_id%22&keyword=${id}`;
+  const {
+    loading,
+    error,
+    getAcoById,
+    getMembersForAco,
+    getPriorPerformance,
+    toggleBookmark,
+    bookmarks,
+    CURRENT_YEAR,
+  } = useContext(ACOContext);
 
-  useEffect(() => {
-    getACO();
-  }, []);
-  // );
+  const [activeTab, setActiveTab] = useState("overview");
+  const [copied, setCopied] = useState(null);
 
-  const getACO = async () => {
-    const response = await axios.get(acoURL);
-    const data = await response.data;
-    const memResponse = await axios.get(memberURL);
-    const memData = await memResponse.data;
-    
+  const aco = useMemo(() => getAcoById(id), [getAcoById, id]);
+  const members = useMemo(() => getMembersForAco(id), [getMembersForAco, id]);
+  const priorPerf = useMemo(() => getPriorPerformance(id), [getPriorPerformance, id]);
 
-    axios.get(perURL).then(function (response) {
-      response.data.length > 0
-        ? setPerformance(response.data)
-        : setPerformance(placeholderData);
-      response.data.length > 0
-        ? setHas2021Data(true)
-        : console.log("has 2021 data");
+  const bookmarked = bookmarks.includes(id);
 
-    });
-    setMembers(memData);
-    setAcoData(data);
-    setloading(false);
+  const copyToClipboard = (text, label) => {
+    if (!text || text === "Not Listed") return;
+    navigator.clipboard.writeText(text);
+    setCopied(label);
+    setTimeout(() => setCopied(null), 2000);
   };
 
-  const handleClick = (string) => {
-    if (string.includes("http://") || string.includes("https://"))
-      window.open(string, "_blank");
-  };
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-[400px]">
+        <span className="loading loading-spinner loading-lg text-primary"></span>
+      </div>
+    );
+  }
 
+  if (error) {
+    return (
+      <div className="alert alert-error shadow-lg max-w-lg mx-auto mt-10">
+        <span>{error}</span>
+      </div>
+    );
+  }
 
+  if (!aco) {
+    return (
+      <div className="alert alert-warning shadow-lg max-w-lg mx-auto mt-10">
+        <span>ACO with ID "{id}" not found.</span>
+      </div>
+    );
+  }
 
-  //props to pass to stats
-  let patients =
-    has2021Data === true ? performance[0].N_AB : placeholderData[0].N_AB *members.length;
+  const panel = aco.panel || aco.memberCount * 709;
+  const arr = calculateARR(panel);
 
-  let panel =
-    typeof patients === "string" ? Number(patients.replace(",", "")) : patients;
-  let arr = panel * 6;
+  const tabs = [
+    { id: "overview", label: "Overview" },
+    { id: "performance", label: "Performance" },
+    { id: "members", label: `Members (${members.length})` },
+    { id: "quality", label: "Quality Measures" },
+    { id: "risk", label: "Risk Assessment" },
+  ];
+
+  const CopyButton = ({ text, label }) => (
+    <button
+      className="btn btn-ghost btn-xs ml-1"
+      onClick={() => copyToClipboard(text, label)}
+      title={`Copy ${label}`}
+    >
+      {copied === label ? (
+        <FaCheck className="text-success text-xs" />
+      ) : (
+        <FaCopy className="text-xs opacity-50" />
+      )}
+    </button>
+  );
 
   return (
-    <div className="container mx-auto">
-      {loading === true ? (
-        <p> Loading... </p>
-      ) : (
-        <div>
-          <div className="p-5 min-h-screen bg-base-200 text-center mx-auto">
-            <h1 className="text-5xl text-primary font-bold">{aco[0].aco_name}</h1>
-            <p className="py-6 text-center">{aco[0].aco_address}</p>
-            <div className="container">
-              <Stats members={members.length} patients={patients} arr={arr} />
+    <div className="container mx-auto max-w-6xl">
+      <div className="p-5 min-h-screen bg-base-200 text-center mx-auto">
+        {/* Header */}
+        <div className="flex justify-center items-start gap-3">
+          <div>
+            <h1 className="text-4xl lg:text-5xl text-primary font-bold">{aco.aco_name}</h1>
+            <p className="py-3 text-center">{aco.aco_address}</p>
+            <div className="flex justify-center gap-2 flex-wrap">
+              <span className="badge badge-info">{aco.aco_id}</span>
+              {aco.Risk_Model && (
+                <span className="badge badge-outline">{aco.Risk_Model}</span>
+              )}
+              {aco.hasPerformanceData && (
+                <span className={`badge ${aco.savings > 0 ? "badge-success" : aco.savings < 0 ? "badge-error" : "badge-ghost"}`}>
+                  {aco.savings > 0 ? "Earned Savings" : aco.savings < 0 ? "Owes Losses" : "Breakeven"}
+                </span>
+              )}
+              <button
+                className={`badge cursor-pointer ${bookmarked ? "badge-warning" : "badge-outline"}`}
+                onClick={() => toggleBookmark(id)}
+              >
+                {bookmarked ? "★ Bookmarked" : "☆ Bookmark"}
+              </button>
             </div>
+          </div>
+        </div>
+
+        {/* Stats Bar */}
+        <div className="my-5">
+          <Stats
+            members={members.length}
+            patients={aco.panel}
+            arr={arr}
+            qualScore={aco.qualScore}
+            currentYear={CURRENT_YEAR}
+          />
+        </div>
+
+        {/* Tabs */}
+        <div className="tabs tabs-boxed justify-center my-5 bg-base-300">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              className={`tab ${activeTab === tab.id ? "tab-active" : ""}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === "overview" && (
+          <div>
+            {/* Contacts */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 my-5 mx-5">
               <Contact
-                icon={<FaUserTie className="my-5 text-9xl" />}
-                title={"ACO Executive"}
-                name={aco[0].aco_exec_name}
-                phone={aco[0].aco_exec_phone}
-                email={aco[0].aco_exec_email}
+                icon={<FaUserTie className="my-5 text-7xl" />}
+                title="ACO Executive"
+                name={aco.aco_exec_name}
+                phone={aco.aco_exec_phone}
+                email={aco.aco_exec_email}
+                CopyButton={CopyButton}
               />
               <Contact
-                icon={<FaUser className="my-5 text-9xl" />}
-                title={"Public Contact"}
-                name={aco[0].aco_public_name}
-                phone={aco[0].aco_public_phone}
-                email={aco[0].aco_public_email}
+                icon={<FaUser className="my-5 text-7xl" />}
+                title="Public Contact"
+                name={aco.aco_public_name}
+                phone={aco.aco_public_phone}
+                email={aco.aco_public_email}
+                CopyButton={CopyButton}
               />
               <Contact
-                icon={<FaUserNurse className="my-5 text-9xl" />}
-                title={"Compliance Contact"}
-                name={aco[0].aco_compliance_contact_name}
+                icon={<FaUserNurse className="my-5 text-7xl" />}
+                title="Compliance Contact"
+                name={aco.aco_compliance_contact_name}
               />
               <Contact
-                icon={<FaUserMd className="my-5 text-9xl" />}
-                title={"Medical Director"}
-                name={aco[0].aco_medical_director_name}
+                icon={<FaUserMd className="my-5 text-7xl" />}
+                title="Medical Director"
+                name={aco.aco_medical_director_name}
               />
             </div>
             <div className="max-w-lg mx-auto my-5">
               <button
                 className="btn btn-info my-5"
-                onClick={() => handleClick(aco[0].aco_public_reporting_website)}
+                onClick={() => openInNewTab(aco.aco_public_reporting_website)}
               >
                 ACO Reporting Website
               </button>
             </div>
-            <div>
-              <div className="">
-                <div className="divider"> 2023 Member List</div>
-                <Members className="w-full" members={members} />
-              </div>
-              {has2021Data === false && loading === false ? (
-                <p className="text-accent">No 2021 Data</p>
-              ) : (
-                <>
-                  <div className="divider"> 2021 Performance Info</div>
-                  <PerformanceData performance={performance} />
-                </>
-              )}
-            </div>
+
+            {/* Provider Composition */}
+            {aco.hasPerformanceData && <ProviderComposition aco={aco} />}
           </div>
-        </div>
-      )}
+        )}
+
+        {activeTab === "performance" && (
+          <div>
+            {aco.hasPerformanceData ? (
+              <>
+                <PerformanceData performance={aco} currentYear={CURRENT_YEAR} />
+                {priorPerf && (
+                  <YearOverYear current={aco} prior={priorPerf} currentYear={CURRENT_YEAR} priorYear={CURRENT_YEAR - 1} />
+                )}
+              </>
+            ) : (
+              <p className="text-accent py-10">No performance data available for this ACO.</p>
+            )}
+          </div>
+        )}
+
+        {activeTab === "members" && (
+          <div>
+            <Members members={members} />
+            {members.length > 0 && (
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold mb-3">NPI Registry Lookup</h3>
+                <p className="text-sm opacity-60 mb-3">
+                  Search the NPPES registry for provider details on member practices
+                </p>
+                <NPILookup practiceName={members[0]?.par_lbn || ""} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "quality" && (
+          <div>
+            {aco.hasPerformanceData ? (
+              <QualityBreakdown aco={aco} />
+            ) : (
+              <p className="text-accent py-10">No quality data available for this ACO.</p>
+            )}
+          </div>
+        )}
+
+        {activeTab === "risk" && (
+          <div>
+            {aco.hasPerformanceData ? (
+              <PenaltyRiskCalculator aco={aco} />
+            ) : (
+              <p className="text-accent py-10">No performance data available for risk assessment.</p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
-

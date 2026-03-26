@@ -1,288 +1,413 @@
-import { React, useEffect, useState } from "react";
-import axios from "axios";
+import React, { useState, useContext, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { OrgUrl, PerformanceUrl } from "../context/ursl";
-import { acoMembers } from "../context/acoMemberData";
+import ACOContext from "../context/context";
+import { FaDownload, FaFilter, FaSortUp, FaSortDown, FaChevronLeft, FaChevronRight } from "react-icons/fa";
+import { cleanAcoName, formatCurrency, openInNewTab, exportToCSV } from "../utils/helpers";
 
-const _ = require("lodash");
+const PAGE_SIZE = 50;
 
 export default function Table() {
-  const [loading, setloading] = useState(true);
-  const [org, setOrg] = useState([]);
-  const [sortState, setStateSort] = useState(false);
-  const [sortName, setSortName] = useState(false);
-  const [sortPanel, setSortPanel] = useState(false);
-  const [sortSavings, setSortSavings] = useState(false);
-  const [sortReporting, setSortReporting] = useState(false);
-  const [oldACOS, setOldACOS] = useState([]);
-  const [selectValue, setSelect] = useState(true);
-  const [display, setDisplay] = useState([]);
+  const {
+    acos,
+    loading,
+    error,
+    allStates,
+    allRiskModels,
+    allReportingMethods,
+    CURRENT_YEAR,
+  } = useContext(ACOContext);
 
-  useEffect(() => {
-    getList();
-  }, []);
+  const [sortCol, setSortCol] = useState("aco_name");
+  const [sortAsc, setSortAsc] = useState(true);
+  const [page, setPage] = useState(0);
+  const [showFilters, setShowFilters] = useState(false);
 
-  const filterRegion = (region) => {
-    return org.filter((aco) =>
-      region.includes(aco.aco_address.slice(-9).slice(0, 2))
-    );
-  };
+  // Filters
+  const [filterState, setFilterState] = useState("");
+  const [filterRiskModel, setFilterRiskModel] = useState("");
+  const [filterMethod, setFilterMethod] = useState("");
+  const [filterMinPanel, setFilterMinPanel] = useState("");
+  const [filterMaxPanel, setFilterMaxPanel] = useState("");
+  const [filterMinQual, setFilterMinQual] = useState("");
+  const [filterSavingsOnly, setFilterSavingsOnly] = useState(false);
+  const [filterLossOnly, setFilterLossOnly] = useState(false);
+  const [includeNoPerf, setIncludeNoPerf] = useState(true);
+  const [nameSearch, setNameSearch] = useState("");
 
-  const handleSort = () => {
-    if (selectValue === true) {
-      setDisplay(display.filter((aco) => aco.N_AB !== undefined));
-    } else {
-      setDisplay(org);
+  const filtered = useMemo(() => {
+    let list = [...acos];
+
+    if (nameSearch) {
+      const lower = nameSearch.toLowerCase();
+      list = list.filter(
+        (a) =>
+          a.aco_name.toLowerCase().includes(lower) ||
+          a.aco_id.toLowerCase().includes(lower)
+      );
     }
-    setSelect(!selectValue);
-  };
+    if (filterState) list = list.filter((a) => a.state === filterState);
+    if (filterRiskModel) list = list.filter((a) => a.Risk_Model === filterRiskModel);
+    if (filterMethod) list = list.filter((a) => a.method === filterMethod);
+    if (filterMinPanel) list = list.filter((a) => a.panel >= parseInt(filterMinPanel));
+    if (filterMaxPanel) list = list.filter((a) => a.panel <= parseInt(filterMaxPanel));
+    if (filterMinQual) list = list.filter((a) => a.qualScore >= parseFloat(filterMinQual));
+    if (filterSavingsOnly) list = list.filter((a) => a.savings > 0);
+    if (filterLossOnly) list = list.filter((a) => a.savings < 0);
+    if (!includeNoPerf) list = list.filter((a) => a.hasPerformanceData);
 
-  const getList = async () => {
-    const [orgResponse, performanceResponse] = await Promise.all([
-      axios.get(OrgUrl),
-      axios.get(PerformanceUrl),
-    ]);
+    return list;
+  }, [
+    acos, nameSearch, filterState, filterRiskModel, filterMethod,
+    filterMinPanel, filterMaxPanel, filterMinQual,
+    filterSavingsOnly, filterLossOnly, includeNoPerf,
+  ]);
 
-    const newData = orgResponse.data;
-    const oldData = performanceResponse.data;
-    const deleteMe = _.difference(
-      oldData.map((aco) => aco.ACO_ID),
-      newData.map((aco) => aco.aco_id)
-    );
-
-    const filteredList = oldData.filter(
-      (aco) => !deleteMe.includes(aco.ACO_ID)
-    );
-    const mergedACOs = _.merge(
-      _.keyBy(newData, "aco_id"),
-      _.keyBy(
-        filteredList.map((aco) => ({
-          ...aco,
-          aco_id: aco.ACO_ID,
-        })),
-        "aco_id"
-      ),
-      _.keyBy(acoMembers, "aco_id")
-    );
-
-    let acoList = Object.entries(mergedACOs).map((e) => e[1]);
-    acoList.pop();
-
-    acoList.forEach((aco) => {
-      aco.state = aco.aco_address.slice(-9, -7);
-    });
-
-    acoList.forEach((aco) => {
-      if (aco.N_AB !== undefined) {
-        aco.panel = _.parseInt(aco.N_AB.replaceAll(",", ""));
-      } else {
-        aco.panel = 0;
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      let cmp = 0;
+      switch (sortCol) {
+        case "aco_id":
+          cmp = (a.aco_id || "").localeCompare(b.aco_id || "");
+          break;
+        case "aco_name":
+          cmp = (a.aco_name || "").localeCompare(b.aco_name || "");
+          break;
+        case "state":
+          cmp = (a.state || "").localeCompare(b.state || "");
+          break;
+        case "panel":
+          cmp = (a.panel || 0) - (b.panel || 0);
+          break;
+        case "savings":
+          cmp = (a.savings || 0) - (b.savings || 0);
+          break;
+        case "qualScore":
+          cmp = (a.qualScore || 0) - (b.qualScore || 0);
+          break;
+        case "method":
+          cmp = (a.method || "").localeCompare(b.method || "");
+          break;
+        case "memberCount":
+          cmp = (a.memberCount || 0) - (b.memberCount || 0);
+          break;
+        default:
+          cmp = 0;
       }
+      return sortAsc ? cmp : -cmp;
     });
+  }, [filtered, sortCol, sortAsc]);
 
-    acoList.forEach((aco) => {
-      if (aco.EarnSaveLoss !== undefined) {
-        aco.savings = _.parseInt(aco.EarnSaveLoss.replaceAll(",", ""));
+  const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
+  const pageData = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  const handleSort = useCallback(
+    (col) => {
+      if (sortCol === col) {
+        setSortAsc(!sortAsc);
       } else {
-        aco.savings = 0;
+        setSortCol(col);
+        setSortAsc(true);
       }
-    });
-    acoList.forEach((aco) => {
-      if (aco.Report_eCQM === "1") {
-        aco.method = "ECQM";
-      } else if (aco.Report_CQM === "1") {
-        aco.method = "MIPS CQM";
-      } else if (aco.Report_WI === "1") {
-        aco.method = "Web Interface";
-      } else {
-        aco.method = "NA";
-      }
-    });
-
-    setOrg(Object.values(acoList));
-    setDisplay(Object.values(acoList));
-    setOldACOS(acoList.filter((aco) => aco.N_AB > 0));
-    setloading(false);
-  };
-
-  const handleClick = (string) => {
-    if (string.includes("http://") || string.includes("https://"))
-      window.open(string, "_blank");
-  };
-
-  let sortedACOs = [...display].sort((aco1, aco2) =>
-    aco1.aco_address.slice(-9, -7) < aco2.aco_address.slice(-9, -7)
-      ? -1
-      : aco1.aco_address.slice(-9, -7) > aco2.aco_address.slice(-9, -7)
-      ? 1
-      : 0
+      setPage(0);
+    },
+    [sortCol, sortAsc]
   );
 
-  let sortedNameACOs = [...display].sort((aco1, aco2) =>
-    aco1.aco_name < aco2.aco_name ? -1 : aco1.aco_name > aco2.aco_name ? 1 : 0
-  );
-  let sortedPanelACOs = [...display].sort((aco1, aco2) =>
-    aco1.panel < aco2.panel ? -1 : aco1.panel > aco2.panel ? 1 : 0
-  );
-
-  let sortedSavingsACOs = [...display].sort((aco1, aco2) =>
-    aco1.savings < aco2.savings ? -1 : aco1.savings > aco2.savings ? 1 : 0
-  );
-  let sortedReportingACOs = [...display].sort((aco1, aco2) =>
-    aco1.method < aco2.method ? -1 : aco1.method > aco2.method ? 1 : 0
-  );
-
-  const handleStateSort = () => {
-    if (sortState === false) {
-      setDisplay(sortedACOs);
-    } else {
-      setDisplay(sortedACOs.reverse());
-    }
-    setStateSort(!sortState);
+  const SortIcon = ({ col }) => {
+    if (sortCol !== col) return null;
+    return sortAsc ? (
+      <FaSortUp className="inline ml-1" />
+    ) : (
+      <FaSortDown className="inline ml-1" />
+    );
   };
 
-  const handleNameSort = () => {
-    if (sortName === false) {
-      setDisplay(sortedNameACOs);
-    } else {
-      setDisplay(sortedNameACOs.reverse());
-    }
-    setSortName(!sortName);
-  };
-  const handlePanelSort = () => {
-    if (sortPanel === false) {
-      setDisplay(sortedPanelACOs);
-    } else {
-      setDisplay(sortedPanelACOs.reverse());
-    }
-    setSortPanel(!sortPanel);
+  const clearFilters = () => {
+    setFilterState("");
+    setFilterRiskModel("");
+    setFilterMethod("");
+    setFilterMinPanel("");
+    setFilterMaxPanel("");
+    setFilterMinQual("");
+    setFilterSavingsOnly(false);
+    setFilterLossOnly(false);
+    setIncludeNoPerf(true);
+    setNameSearch("");
+    setPage(0);
   };
 
-  const handleSavingsSort = () => {
-    if (sortSavings === false) {
-      setDisplay(sortedSavingsACOs);
-    } else {
-      setDisplay(sortedSavingsACOs.reverse());
-    }
-    setSortSavings(!sortSavings);
-  };
-  const handleReportingSort = () => {
-    if (sortReporting === false) {
-      setDisplay(sortedReportingACOs);
-    } else {
-      setDisplay(sortedReportingACOs.reverse());
-    }
-    setSortReporting(!sortReporting);
-  };
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-[400px]">
+        <span className="loading loading-spinner loading-lg text-primary"></span>
+      </div>
+    );
+  }
 
-  const tableRows = display.map((i) => (
-    <tr key={i.aco_id} className="hover text-center border-b border-info">
-      <td className="w-2 px-5">{i.aco_id}</td>
-      <td className="w-2 xl:w-1/4 px-5">
-        <Link to={`/aco/${i.aco_id}`}>
-          {_.truncate(
-            _.replace(
-              _.replace(_.replace(i.aco_name, ", LLC", ""), "LLC", ""),
-              ", Inc.",
-              ""
-            ),
-
-            {
-              length: 50,
-            }
-          )}
-        </Link>
-      </td>
-      <td className="w-2 px-5">{i.state}</td>
-      <td className="w-2 px-5">{i.N_AB !== undefined ? i.N_AB : i.panel}</td>
-      <td className="w-2 px-5">
-        {i.savings > 0
-          ? `$${(i.savings / 1000000).toFixed(2)} million`
-          : "No Shared Savings"}
-      </td>
-      <td className="w-2 px-5">{i.method}</td>
-      <td className="w-2 px-5">
-        <button
-          className="btn btn-outline normal-case btn-sm text-info"
-          onClick={() => handleClick(i.aco_public_reporting_website)}
-        >
-          ACO Reporting Website
-        </button>
-      </td>
-    </tr>
-  ));
+  if (error) {
+    return (
+      <div className="alert alert-error shadow-lg max-w-lg mx-auto">
+        <span>{error}</span>
+      </div>
+    );
+  }
 
   return (
-    <>
-      <div className="container mx-auto block justify-center ">
-        <h1 className="text-3xl font-bold text-center text-secondary -mt-16 mb-6">
-          All 2023 ACO's
+    <div className="container mx-auto px-2">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
+        <h1 className="text-2xl font-bold text-secondary">
+          {CURRENT_YEAR} ACOs ({filtered.length})
         </h1>
-        <div className="flex justify-end w-4/5 mx-auto ">
-          <div className="form-control w-full md:w-1/2 lg:w-4/12">
-            <label className="label cursor-pointer ">
-              <span className="label-text">
-                Include ACOs Missing 2021 Data
-              </span>
+        <div className="flex gap-2">
+          <button
+            className={`btn btn-sm ${showFilters ? "btn-primary" : "btn-outline"}`}
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            <FaFilter className="mr-1" /> Filters
+          </button>
+          <button
+            className="btn btn-sm btn-outline btn-success"
+            onClick={() =>
+              exportToCSV(filtered, `aco-data-${CURRENT_YEAR}.csv`)
+            }
+          >
+            <FaDownload className="mr-1" /> Export CSV
+          </button>
+        </div>
+      </div>
+
+      {/* Filter Panel */}
+      {showFilters && (
+        <div className="bg-base-200 p-4 rounded-lg mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div>
+              <label className="label label-text text-xs">Name/ID</label>
+              <input
+                type="text"
+                className="input input-bordered input-sm w-full"
+                placeholder="Search..."
+                value={nameSearch}
+                onChange={(e) => { setNameSearch(e.target.value); setPage(0); }}
+              />
+            </div>
+            <div>
+              <label className="label label-text text-xs">State</label>
+              <select
+                className="select select-bordered select-sm w-full"
+                value={filterState}
+                onChange={(e) => { setFilterState(e.target.value); setPage(0); }}
+              >
+                <option value="">All States</option>
+                {allStates.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label label-text text-xs">Risk Model</label>
+              <select
+                className="select select-bordered select-sm w-full"
+                value={filterRiskModel}
+                onChange={(e) => { setFilterRiskModel(e.target.value); setPage(0); }}
+              >
+                <option value="">All Models</option>
+                {allRiskModels.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label label-text text-xs">Reporting</label>
+              <select
+                className="select select-bordered select-sm w-full"
+                value={filterMethod}
+                onChange={(e) => { setFilterMethod(e.target.value); setPage(0); }}
+              >
+                <option value="">All Methods</option>
+                {allReportingMethods.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label label-text text-xs">Min Panel</label>
+              <input
+                type="number"
+                className="input input-bordered input-sm w-full"
+                placeholder="0"
+                value={filterMinPanel}
+                onChange={(e) => { setFilterMinPanel(e.target.value); setPage(0); }}
+              />
+            </div>
+            <div>
+              <label className="label label-text text-xs">Min Quality</label>
+              <input
+                type="number"
+                className="input input-bordered input-sm w-full"
+                placeholder="0"
+                value={filterMinQual}
+                onChange={(e) => { setFilterMinQual(e.target.value); setPage(0); }}
+              />
+            </div>
+          </div>
+          <div className="flex gap-4 mt-3 flex-wrap items-center">
+            <label className="label cursor-pointer gap-2">
               <input
                 type="checkbox"
-                checked={selectValue}
-                className="checkbox checkbox-primary "
-                onChange={handleSort}
+                className="checkbox checkbox-sm checkbox-success"
+                checked={filterSavingsOnly}
+                onChange={(e) => { setFilterSavingsOnly(e.target.checked); setFilterLossOnly(false); setPage(0); }}
               />
+              <span className="label-text text-xs">Savings only</span>
             </label>
+            <label className="label cursor-pointer gap-2">
+              <input
+                type="checkbox"
+                className="checkbox checkbox-sm checkbox-error"
+                checked={filterLossOnly}
+                onChange={(e) => { setFilterLossOnly(e.target.checked); setFilterSavingsOnly(false); setPage(0); }}
+              />
+              <span className="label-text text-xs">Losses only</span>
+            </label>
+            <label className="label cursor-pointer gap-2">
+              <input
+                type="checkbox"
+                className="checkbox checkbox-sm checkbox-primary"
+                checked={includeNoPerf}
+                onChange={(e) => { setIncludeNoPerf(e.target.checked); setPage(0); }}
+              />
+              <span className="label-text text-xs">Include ACOs without performance data</span>
+            </label>
+            <button className="btn btn-ghost btn-xs" onClick={clearFilters}>
+              Clear All
+            </button>
           </div>
         </div>
-      </div>
-      <div className="flex mx-auto justify-center flex-col align-middle text-center w-4/5 h-full">
-        <div className="container overflow-display overscroll-contain pr-0 border-info rounded-l-md border overflow-y-scroll h-96">
-          <table className="table table-compact table-fixed text-center overflow-scroll	">
-            <thead className="sticky top-0">
-              <tr className="border-b border-info text-primary-content">
-                <th>Id</th>
-                <th
-                  onClick={handleNameSort}
-                  className="normal-case hover:cursor-pointer"
-                >
-                  Name
-                </th>
-                <th
-                  onClick={handleStateSort}
-                  className="normal-case hover:cursor-pointer"
-                >
-                  State
-                </th>
-                <th
-                  onClick={handlePanelSort}
-                  className="normal-case hover:cursor-pointer"
-                >
-                  2021 Panel
-                </th>
-                <th
-                  onClick={handleSavingsSort}
-                  className="normal-case hover:cursor-pointer"
-                >
-                  2021 Shared Savings
-                </th>
-                <th
-                  onClick={handleReportingSort}
-                  className="normal-case hover:cursor-pointer"
-                >
-                  2021 Reporting Method
-                </th>
-                <th className="normal-case ">Public Reporting </th>
+      )}
+
+      {/* Table */}
+      <div className="overflow-x-auto border border-info rounded-lg">
+        <table className="table table-compact w-full">
+          <thead className="sticky top-0 bg-base-200 z-10">
+            <tr className="border-b border-info">
+              <th className="cursor-pointer hover:bg-base-300" onClick={() => handleSort("aco_id")}>
+                ID <SortIcon col="aco_id" />
+              </th>
+              <th className="cursor-pointer hover:bg-base-300" onClick={() => handleSort("aco_name")}>
+                Name <SortIcon col="aco_name" />
+              </th>
+              <th className="cursor-pointer hover:bg-base-300" onClick={() => handleSort("state")}>
+                State <SortIcon col="state" />
+              </th>
+              <th className="cursor-pointer hover:bg-base-300" onClick={() => handleSort("panel")}>
+                Panel <SortIcon col="panel" />
+              </th>
+              <th className="cursor-pointer hover:bg-base-300" onClick={() => handleSort("qualScore")}>
+                Quality <SortIcon col="qualScore" />
+              </th>
+              <th className="cursor-pointer hover:bg-base-300" onClick={() => handleSort("savings")}>
+                Savings <SortIcon col="savings" />
+              </th>
+              <th className="cursor-pointer hover:bg-base-300" onClick={() => handleSort("method")}>
+                Method <SortIcon col="method" />
+              </th>
+              <th className="cursor-pointer hover:bg-base-300" onClick={() => handleSort("memberCount")}>
+                Members <SortIcon col="memberCount" />
+              </th>
+              <th>Website</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pageData.map((aco) => (
+              <tr key={aco.aco_id} className="hover border-b border-base-300">
+                <td className="font-mono text-xs">{aco.aco_id}</td>
+                <td>
+                  <Link to={`/aco/${aco.aco_id}`} className="link link-primary text-sm">
+                    {cleanAcoName(aco.aco_name, 45)}
+                  </Link>
+                </td>
+                <td>{aco.state}</td>
+                <td className="text-right">{aco.panel > 0 ? aco.panel.toLocaleString() : "-"}</td>
+                <td className="text-right">
+                  {aco.qualScore > 0 ? (
+                    <span className={aco.qualScore >= 80 ? "text-success" : aco.qualScore >= 50 ? "text-warning" : "text-error"}>
+                      {aco.qualScore.toFixed(1)}%
+                    </span>
+                  ) : "-"}
+                </td>
+                <td className="text-right">
+                  {aco.savings !== 0 ? (
+                    <span className={aco.savings > 0 ? "text-success" : "text-error"}>
+                      {formatCurrency(aco.savings)}
+                    </span>
+                  ) : "-"}
+                </td>
+                <td className="text-xs">{aco.method !== "N/A" ? aco.method : "-"}</td>
+                <td className="text-right">{aco.memberCount || "-"}</td>
+                <td>
+                  {aco.aco_public_reporting_website && (
+                    <button
+                      className="btn btn-outline btn-xs text-info normal-case"
+                      onClick={() => openInNewTab(aco.aco_public_reporting_website)}
+                    >
+                      Visit
+                    </button>
+                  )}
+                </td>
               </tr>
-            </thead>
-            <tbody className="text-left border-b border-info">
-              {tableRows}
-            </tbody>
-          </table>
-        </div>
-        <p className="text-sm text-success pt-2 pb-0 m-0 italic ">
-          Click an ACO Name above to learn more
-        </p>
+            ))}
+          </tbody>
+        </table>
       </div>
-    </>
+
+      {/* Pagination */}
+      <div className="flex justify-between items-center mt-3 mb-6">
+        <p className="text-sm opacity-60">
+          Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, sorted.length)} of {sorted.length} ACOs
+        </p>
+        <div className="btn-group">
+          <button
+            className="btn btn-sm"
+            disabled={page === 0}
+            onClick={() => setPage(page - 1)}
+          >
+            <FaChevronLeft />
+          </button>
+          {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+            let pageNum;
+            if (totalPages <= 7) {
+              pageNum = i;
+            } else if (page < 4) {
+              pageNum = i;
+            } else if (page > totalPages - 5) {
+              pageNum = totalPages - 7 + i;
+            } else {
+              pageNum = page - 3 + i;
+            }
+            return (
+              <button
+                key={pageNum}
+                className={`btn btn-sm ${page === pageNum ? "btn-active" : ""}`}
+                onClick={() => setPage(pageNum)}
+              >
+                {pageNum + 1}
+              </button>
+            );
+          })}
+          <button
+            className="btn btn-sm"
+            disabled={page >= totalPages - 1}
+            onClick={() => setPage(page + 1)}
+          >
+            <FaChevronRight />
+          </button>
+        </div>
+      </div>
+
+      <p className="text-sm text-success pb-2 italic text-center">
+        Click an ACO Name to view details
+      </p>
+    </div>
   );
 }
-

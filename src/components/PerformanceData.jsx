@@ -6,62 +6,54 @@ import {
   FaMoneyBill,
   FaBalanceScale,
 } from "react-icons/fa";
+import { formatCurrency } from "../utils/helpers";
 
-export default function PerformanceData({ performance }) {
-  const earned =
-    performance[0].EarnSaveLoss.length > 8
-      ? `${performance[0].EarnSaveLoss.slice(0, 3).replace(",", ".")} m`
-      : performance[0].EarnSaveLoss.length < 3
-      ? 0
-      : `${performance[0].EarnSaveLoss.slice(0, 3)} k`;
-  const generated =
-    performance[0].GenSaveLoss.length > 8
-      ? `${performance[0].GenSaveLoss.slice(0, 3).replace(",", ".")} m`
-      : `${performance[0].GenSaveLoss.slice(0, 3)} k`;
+export default function PerformanceData({ performance, currentYear }) {
+  const year = currentYear || "Current";
 
   return (
     <div className="w-full">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 ">
+      <h3 className="text-lg font-semibold mb-3">{year} Performance Results</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <Stat
-          title={"Risk Model:"}
-          statValue={performance[0].Risk_Model}
-          statDesc={"Risk"}
+          title="Risk Model"
+          statValue={performance.Risk_Model || "N/A"}
+          statDesc="Risk Arrangement"
           icon={
             <FaBalanceScale className="my-2 text-4xl text-primary-content hover:text-primary" />
           }
         />
         <Stat
-          title={"Generated Savings"}
-          statValue={`$${generated}`}
-          statDesc={"Savings or Loss"}
+          title="Generated Savings/Loss"
+          statValue={formatCurrency(performance.genSavings || performance.GenSaveLoss)}
+          statDesc={performance.genSavings > 0 ? "Generated Savings" : performance.genSavings < 0 ? "Generated Loss" : "Breakeven"}
           icon={
             <FaMoneyCheckAlt className="my-2 text-4xl text-primary-content hover:text-success" />
           }
         />
         <Stat
-          title={"Earned Savings"}
-          statValue={`$${earned}`}
-          statDesc={"Amount Earned"}
+          title="Earned Savings/Loss"
+          statValue={formatCurrency(performance.savings || performance.EarnSaveLoss)}
+          statDesc={performance.savings > 0 ? "Earned Savings" : performance.savings < 0 ? "Owed Losses" : "N/A"}
           icon={
             <FaMoneyBill className="my-2 text-4xl text-primary-content hover:text-success" />
           }
         />
         <Stat
-          title={"Score"}
-          statValue={performance[0].QualScore}
-          statDesc={"2021 Quality Performance"}
+          title="Quality Score"
+          statValue={`${performance.qualScore || performance.QualScore || "N/A"}${typeof (performance.qualScore || performance.QualScore) === "number" ? "%" : ""}`}
+          statDesc={`${year} Quality Performance`}
           icon={
             <FaChartLine className="text-4xl text-primary-content hover:text-primary" />
           }
         />
       </div>
-      <p>
-        2021 Submission Method:{" "}
-        {performance[0].Report_CQM === "1"
-          ? "MIPS CQM"
-          : performance[0].Report_eCQM === "1"
-          ? "eCQM"
-          : "Web Interface"}
+      <p className="text-sm mt-3 opacity-70">
+        {year} Submission Method: {performance.method || (
+          performance.Report_CQM === "1" ? "MIPS CQM" :
+          performance.Report_eCQM === "1" ? "eCQM" :
+          performance.Report_WI === "1" ? "Web Interface" : "N/A"
+        )}
       </p>
     </div>
   );
