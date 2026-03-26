@@ -2,7 +2,7 @@ import React from "react";
 import { FaPiedPiperHat } from "react-icons/fa";
 import { Link } from "react-router-dom";
 
-export default function Navbar({ title }) {
+export default function Navbar() {
   return (
     <nav className="navbar mb-6 shadow-lg bg-neutral text-neutral-content">
       <div className="container mx-auto">
@@ -13,7 +13,7 @@ export default function Navbar({ title }) {
           </Link>
         </div>
         <div className="flex-1 px-2 mx-2">
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-1">
             <Link
               to="/"
               className="btn btn-ghost btn-sm text-primary-content rounded-btn"
@@ -22,9 +22,27 @@ export default function Navbar({ title }) {
             </Link>
             <Link
               to="/table"
-              className="btn btn-ghost text-primary-content btn-sm rounded-btn"
+              className="btn btn-ghost btn-sm text-primary-content rounded-btn"
             >
               Table
+            </Link>
+            <Link
+              to="/leaderboard"
+              className="btn btn-ghost btn-sm text-primary-content rounded-btn"
+            >
+              Leaderboard
+            </Link>
+            <Link
+              to="/compare"
+              className="btn btn-ghost btn-sm text-primary-content rounded-btn"
+            >
+              Compare
+            </Link>
+            <Link
+              to="/market"
+              className="btn btn-ghost btn-sm text-primary-content rounded-btn"
+            >
+              Market
             </Link>
           </div>
         </div>

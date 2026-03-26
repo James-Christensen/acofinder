@@ -1,94 +1,61 @@
-import { React, useEffect, useState } from "react";
-import axios from "axios";
-import { OrgUrl, PerformanceUrl } from "../context/ursl";
-import ACO from "../components/ACO";
-const _ = require("lodash");
+import React from "react";
 
 export default function About() {
-  const [loading, setloading] = useState(true);
-  const [org, setOrg] = useState([]);
-  const [newACOs, setNewACOs] = useState([]);
-  const [oldACOs, setOldACOs] = useState([]);
-
-  useEffect(() => {
-    getACO();
-  }, []);
-
-  const getACO = async () => {
-    const response = await axios.get(OrgUrl);
-    const data = await response.data;
-    axios.get(PerformanceUrl).then((response) => {
-      setOldACOs(response.data);
-    });
-    setNewACOs(data);
-    setloading(false);
-  };
-
-  if (oldACOs && oldACOs.length > 1) {
-    const deleteMe = _.difference(
-      oldACOs.map((aco) => aco.ACO_ID),
-      newACOs.map((aco) => aco.aco_id)
-    );
-
-    const filteredList = oldACOs.filter(
-      (aco) => !deleteMe.includes(aco.ACO_ID)
-    );
-    // console.log(filteredList.find((aco) => aco.ACO_ID === "A1001"));
-    // console.log(oldACOs.find((aco) => aco.ACO_ID === "A1001"));
-    // console.log(deleteMe)
-    // console.log(filteredList.includes("A1769"));
-    // console.log(filteredList);
-
-    if (filteredList.length > 0) {
-      for (let i = 0; i < filteredList.length; i++) {
-        filteredList[i].aco_id = filteredList[i].ACO_ID;
-        delete filteredList[i].ACO_ID;
-      }
-    }
-    let newArray = [];
-    if (filteredList.length > 0) {
-      const mergedACOs = _.merge(
-        _.keyBy(newACOs, "aco_id"),
-        _.keyBy(filteredList, "aco_id")
-      );
-
-      function updateOrg() {
-        
-        for (const [key, value] of Object.entries(mergedACOs)) {
-          newArray.push(value);
-        }
-        return newArray
-      }
-      updateOrg();
-      setOrg(newArray);
-    }
-  }
-
   return (
-    <>
-      <div className="flex justify-center flex-col align-middle text-center">
-        <h1 className="text-6xl mb-4">About</h1>
-        <p className="">
-          Search tool built for sales reps to find ACOs and learn more about
-          them.
+    <div className="container mx-auto max-w-3xl px-4">
+      <div className="text-center mb-8">
+        <h1 className="text-5xl font-bold mb-4">About ACO Finder</h1>
+        <p className="text-lg">
+          A sales intelligence tool for researching Medicare Shared Savings
+          Program (MSSP) Accountable Care Organizations.
         </p>
       </div>
-      {/* {loading === true ? (
-        <p>Loading...</p>
-      ) : (
-        <>
-          {org.map((i) => (
-            <ACO
-              key={i.aco_id}
-              name={i.ACO_Name}
-              id={i.aco_id}
-              website={i.aco_public_reporting_website}
-              address={i.aco_address}
-              state={i.ACO_State}
-            />
-          ))}
-        </>
-      )} */}
-    </>
+
+      <div className="space-y-6">
+        <div className="card bg-base-200">
+          <div className="card-body">
+            <h2 className="card-title">What It Does</h2>
+            <p>
+              ACO Finder aggregates publicly available CMS data to help sales
+              reps identify, research, and prioritize ACO prospects. It combines
+              organization data, financial performance results, quality scores,
+              and member practice lists into a single searchable interface.
+            </p>
+          </div>
+        </div>
+
+        <div className="card bg-base-200">
+          <div className="card-body">
+            <h2 className="card-title">Data Sources</h2>
+            <ul className="list-disc list-inside space-y-1">
+              <li>CMS MSSP Participating ACO Organizations</li>
+              <li>CMS MSSP Performance Year Financial & Quality Results</li>
+              <li>CMS MSSP ACO Participant/Member Practices</li>
+            </ul>
+            <p className="text-sm opacity-70 mt-2">
+              All data is sourced from publicly available CMS datasets at
+              data.cms.gov.
+            </p>
+          </div>
+        </div>
+
+        <div className="card bg-base-200">
+          <div className="card-body">
+            <h2 className="card-title">Key Features</h2>
+            <ul className="list-disc list-inside space-y-1">
+              <li>Search and filter ACOs by name, state, region, risk model</li>
+              <li>Advanced table with sorting, filtering, and CSV export</li>
+              <li>Detailed ACO profiles with contacts, members, and performance</li>
+              <li>Quality measure breakdowns with sales talking points</li>
+              <li>Year-over-year performance comparison</li>
+              <li>Side-by-side ACO comparison tool</li>
+              <li>Savings/loss leaderboard for prospect prioritization</li>
+              <li>Market insights and territory sizing by state</li>
+              <li>Bookmark ACOs for quick access</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
