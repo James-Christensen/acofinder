@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { parseNumericString, formatCurrency } from "../utils/helpers";
 
-export default function PenaltyRiskCalculator({ aco }) {
+export default function PenaltyRiskCalculator({ aco, priorPerf }) {
   const analysis = useMemo(() => {
     const qualScore = aco.qualScore || parseFloat(aco.QualScore) || 0;
     const savRate = parseFloat(aco.Sav_Rate) || 0;
@@ -10,7 +10,7 @@ export default function PenaltyRiskCalculator({ aco }) {
     const earnedSavings = aco.savings || parseNumericString(aco.EarnSaveLoss);
     const benchmark = parseNumericString(aco.BnchmkMinExp);
     const isTwoSided =
-      aco.Risk_Model && aco.Risk_Model.toLowerCase().includes("loss");
+      aco.Risk_Model && aco.Risk_Model.toLowerCase().includes("two");
     const finalShareRate = parseFloat(aco.FinalShareRate) || 0;
     const maxShareRate = parseFloat(aco.MaxShareRate) || 0;
 
@@ -81,8 +81,35 @@ export default function PenaltyRiskCalculator({ aco }) {
       });
     }
 
+    // Feature 6: Benchmark Pressure risk factor
+    if (benchmark > 0 && genSavings < 0) {
+      const pressurePercent = Math.abs(genSavings / benchmark) * 100;
+      risks.push({
+        factor: "Benchmark Pressure",
+        detail: `Spending ${pressurePercent.toFixed(1)}% above benchmark minimum expenditure (${formatCurrency(benchmark)})`,
+        severity: pressurePercent > 5 ? "high" : "medium",
+        impact: "ACO may face increasing benchmark adjustments in future performance years",
+      });
+      if (pressurePercent > 5) overallRisk = "high";
+      else if (overallRisk !== "high") overallRisk = "medium";
+    }
+
+    // Feature 6: Worsening Benchmark Gap (YoY decline)
+    if (priorPerf) {
+      const priorGenSavings = parseNumericString(priorPerf.GenSaveLoss);
+      if (priorGenSavings > genSavings && genSavings < 0) {
+        risks.push({
+          factor: "Worsening Benchmark Gap",
+          detail: `Generated savings declined from ${formatCurrency(priorGenSavings)} to ${formatCurrency(genSavings)} year-over-year`,
+          severity: "medium",
+          impact: "Trend suggests increasing financial pressure; ACO may need to reconsider strategy",
+        });
+        if (overallRisk !== "high") overallRisk = "medium";
+      }
+    }
+
     return { risks, overallRisk, isTwoSided, qualScore, savRate, genSavings, earnedSavings };
-  }, [aco]);
+  }, [aco, priorPerf]);
 
   const riskColors = {
     high: "text-error",

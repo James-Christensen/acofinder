@@ -3,11 +3,13 @@ import axios from "axios";
 import {
   OrgUrl,
   PerformanceUrl,
-  memberURL,
   PriorPerformanceUrl,
+  buildMemberPageUrl,
   buildSearchUrl,
+  CMS_PAGE_SIZE,
   CURRENT_YEAR,
   PRIOR_YEAR,
+  ORG_YEAR,
 } from "./ursl";
 import {
   getStateFromAddress,
@@ -16,16 +18,45 @@ import {
   getBookmarks,
   toggleBookmark as toggleBookmarkHelper,
 } from "../utils/helpers";
+import { calculateSalesPriority } from "../utils/salesPriority";
+import { getMAPenetration } from "../data/maPenetration";
+import { isAcoReachParticipant } from "../data/acoReach";
+import { calculateChurn } from "../utils/churnAnalysis";
 
 const ACOContext = createContext();
+
+// Normalize API response keys to lowercase for consistent access
+function normalizeKeys(obj) {
+  const normalized = {};
+  Object.keys(obj).forEach((key) => {
+    normalized[key.toLowerCase()] = obj[key];
+  });
+  return normalized;
+}
+
+// Fetch all paginated member data for a given year
+async function fetchAllMemberPages(year) {
+  let allData = [];
+  let offset = 0;
+  while (true) {
+    const url = buildMemberPageUrl(year, offset);
+    const res = await axios.get(url);
+    allData = allData.concat(res.data);
+    if (res.data.length < CMS_PAGE_SIZE) break;
+    offset += CMS_PAGE_SIZE;
+  }
+  return allData.map(normalizeKeys);
+}
 
 export const ACOProvider = ({ children }) => {
   const [acos, setAcos] = useState([]);
   const [members, setMembers] = useState({});
+  const [priorMembers, setPriorMembers] = useState({});
   const [priorPerformance, setPriorPerformance] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [bookmarks, setBookmarksState] = useState(getBookmarks());
+  const [npiCache, setNpiCache] = useState({});
 
   useEffect(() => {
     fetchAllData();
@@ -35,16 +66,18 @@ export const ACOProvider = ({ children }) => {
     setLoading(true);
     setError(null);
     try {
-      const [orgRes, perfRes, memberRes, priorPerfRes] = await Promise.all([
-        axios.get(OrgUrl),
-        axios.get(PerformanceUrl),
-        axios.get(memberURL),
-        axios.get(PriorPerformanceUrl).catch(() => ({ data: [] })),
-      ]);
+      // Fetch org, performance, prior performance, and both years of member data in parallel
+      const [orgRes, perfRes, priorPerfRes, currentMemberData, priorMemberData] =
+        await Promise.all([
+          axios.get(OrgUrl),
+          axios.get(PerformanceUrl),
+          axios.get(PriorPerformanceUrl).catch(() => ({ data: [] })),
+          fetchAllMemberPages(CURRENT_YEAR),
+          fetchAllMemberPages(PRIOR_YEAR).catch(() => []),
+        ]);
 
-      const orgData = orgRes.data;
+      const orgData = orgRes.data.map(normalizeKeys);
       const perfData = perfRes.data;
-      const memberData = memberRes.data;
       const priorPerfData = priorPerfRes.data;
 
       // Build performance lookup by ACO_ID
@@ -53,17 +86,33 @@ export const ACOProvider = ({ children }) => {
         perfByAcoId[p.ACO_ID] = p;
       });
 
-      // Build member data grouped by aco_id
+      // Build prior performance lookup by ACO_ID
+      const priorPerfByAcoId = {};
+      priorPerfData.forEach((p) => {
+        priorPerfByAcoId[p.ACO_ID] = p;
+      });
+
+      // Build member data grouped by aco_id (current year)
       const membersByAco = {};
-      memberData.forEach((m) => {
+      currentMemberData.forEach((m) => {
         if (!membersByAco[m.aco_id]) membersByAco[m.aco_id] = [];
         membersByAco[m.aco_id].push(m);
       });
 
-      // Merge org + performance + member counts
+      // Build member data grouped by aco_id (prior year)
+      const priorMembersByAco = {};
+      priorMemberData.forEach((m) => {
+        if (!priorMembersByAco[m.aco_id]) priorMembersByAco[m.aco_id] = [];
+        priorMembersByAco[m.aco_id].push(m);
+      });
+
+      // Merge org + performance + member counts + new computed fields
       const merged = orgData.map((org) => {
         const perf = perfByAcoId[org.aco_id] || {};
-        const memberCount = (membersByAco[org.aco_id] || []).length;
+        const priorPerf = priorPerfByAcoId[org.aco_id] || null;
+        const currentMems = membersByAco[org.aco_id] || [];
+        const priorMems = priorMembersByAco[org.aco_id] || [];
+        const memberCount = currentMems.length;
         const state = getStateFromAddress(org.aco_address);
         const panel = parseNumericString(perf.N_AB);
         const savings = parseNumericString(perf.EarnSaveLoss);
@@ -71,6 +120,27 @@ export const ACOProvider = ({ children }) => {
         const method = getReportingMethod(perf);
         const qualScore = parseFloat(perf.QualScore) || 0;
         const hasPerformanceData = !!perf.ACO_ID;
+
+        // Feature 2: Sales Priority Score
+        const acoData = {
+          ...org,
+          ...perf,
+          panel,
+          savings,
+          genSavings,
+          qualScore,
+          hasPerformanceData,
+        };
+        const salesPriority = calculateSalesPriority(acoData, priorPerf);
+
+        // Feature 3: MA Penetration
+        const maPenetration = getMAPenetration(state);
+
+        // Feature 8: ACO REACH cross-reference
+        const isReach = isAcoReachParticipant(org.aco_name);
+
+        // Feature 4: Churn & Stability
+        const churn = calculateChurn(currentMems, priorMems);
 
         return {
           ...org,
@@ -84,11 +154,20 @@ export const ACOProvider = ({ children }) => {
           qualScore,
           memberCount,
           hasPerformanceData,
+          salesPriority,
+          maPenetration,
+          isReach,
+          churnRate: churn.churnRate,
+          providerGrowth: churn.growthRate,
+          providersAdded: churn.added.length,
+          providersLost: churn.lost.length,
+          netProviderChange: churn.netChange,
         };
       });
 
       setAcos(merged);
       setMembers(membersByAco);
+      setPriorMembers(priorMembersByAco);
       setPriorPerformance(priorPerfData);
       setLoading(false);
     } catch (err) {
@@ -120,6 +199,11 @@ export const ACOProvider = ({ children }) => {
     [members]
   );
 
+  const getPriorMembersForAco = useCallback(
+    (acoId) => priorMembers[acoId] || [],
+    [priorMembers]
+  );
+
   const getPriorPerformance = useCallback(
     (acoId) => priorPerformance.find((p) => p.ACO_ID === acoId) || null,
     [priorPerformance]
@@ -128,6 +212,16 @@ export const ACOProvider = ({ children }) => {
   const toggleBookmark = useCallback((acoId) => {
     const updated = toggleBookmarkHelper(acoId);
     setBookmarksState([...updated]);
+  }, []);
+
+  // NPI cache management for Provider Directory
+  const getNpiCache = useCallback(
+    (acoId) => npiCache[acoId] || null,
+    [npiCache]
+  );
+
+  const setNpiCacheForAco = useCallback((acoId, data) => {
+    setNpiCache((prev) => ({ ...prev, [acoId]: data }));
   }, []);
 
   const bookmarkedAcos = useMemo(
@@ -156,14 +250,33 @@ export const ACOProvider = ({ children }) => {
     const avgQualScore =
       withPerf.reduce((sum, a) => sum + a.qualScore, 0) / (withPerf.length || 1);
     const withPerformance = acos.filter((a) => a.hasPerformanceData).length;
+    const reachCount = acos.filter((a) => a.isReach).length;
 
     const byState = {};
     acos.forEach((a) => {
       if (!a.state) return;
-      if (!byState[a.state]) byState[a.state] = { count: 0, beneficiaries: 0, savings: 0 };
+      if (!byState[a.state])
+        byState[a.state] = {
+          count: 0,
+          beneficiaries: 0,
+          savings: 0,
+          maPenetration: getMAPenetration(a.state),
+          totalQualScore: 0,
+          qualCount: 0,
+        };
       byState[a.state].count++;
       byState[a.state].beneficiaries += a.panel || 0;
       byState[a.state].savings += a.savings || 0;
+      if (a.qualScore > 0) {
+        byState[a.state].totalQualScore += a.qualScore;
+        byState[a.state].qualCount++;
+      }
+    });
+
+    // Compute avg quality per state
+    Object.values(byState).forEach((s) => {
+      s.avgQualScore =
+        s.qualCount > 0 ? Math.round((s.totalQualScore / s.qualCount) * 10) / 10 : 0;
     });
 
     const byRiskModel = {};
@@ -174,7 +287,17 @@ export const ACOProvider = ({ children }) => {
       byRiskModel[model].beneficiaries += a.panel || 0;
     });
 
-    return { total, totalBeneficiaries, totalSavings, totalGenSavings, avgQualScore, withPerformance, byState, byRiskModel };
+    return {
+      total,
+      totalBeneficiaries,
+      totalSavings,
+      totalGenSavings,
+      avgQualScore,
+      withPerformance,
+      reachCount,
+      byState,
+      byRiskModel,
+    };
   }, [acos]);
 
   const value = {
@@ -184,6 +307,7 @@ export const ACOProvider = ({ children }) => {
     searchAcos,
     getAcoById,
     getMembersForAco,
+    getPriorMembersForAco,
     getPriorPerformance,
     bookmarks,
     toggleBookmark,
@@ -192,8 +316,11 @@ export const ACOProvider = ({ children }) => {
     allRiskModels,
     allReportingMethods,
     marketStats,
+    getNpiCache,
+    setNpiCacheForAco,
     CURRENT_YEAR,
     PRIOR_YEAR,
+    ORG_YEAR,
   };
 
   return <ACOContext.Provider value={value}>{children}</ACOContext.Provider>;

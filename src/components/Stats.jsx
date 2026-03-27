@@ -1,7 +1,7 @@
 import React from "react";
 import { FaHospital, FaNotesMedical, FaDollarSign, FaChartLine } from "react-icons/fa";
 
-export default function Stats({ members, patients, arr, qualScore, currentYear }) {
+export default function Stats({ members, patients, arr, qualScore, currentYear, orgYear }) {
   return (
     <div className="stats stats-vertical sm:stats-horizontal shadow">
       <div className="stat">
@@ -10,7 +10,7 @@ export default function Stats({ members, patients, arr, qualScore, currentYear }
         </div>
         <div className="stat-title">Member Practices</div>
         <div className="stat-value">{(members || 0).toLocaleString()}</div>
-        <div className="stat-desc">{currentYear} TINs</div>
+        <div className="stat-desc">{orgYear || currentYear} TINs</div>
       </div>
 
       <div className="stat">

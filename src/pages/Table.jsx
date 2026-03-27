@@ -2,7 +2,8 @@ import React, { useState, useContext, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import ACOContext from "../context/context";
 import { FaDownload, FaFilter, FaSortUp, FaSortDown, FaChevronLeft, FaChevronRight } from "react-icons/fa";
-import { cleanAcoName, formatCurrency, openInNewTab, exportToCSV } from "../utils/helpers";
+import { cleanAcoName, formatCurrency, exportToCSV } from "../utils/helpers";
+import { getSalesPriorityColor } from "../utils/salesPriority";
 
 const PAGE_SIZE = 50;
 
@@ -14,7 +15,7 @@ export default function Table() {
     allStates,
     allRiskModels,
     allReportingMethods,
-    CURRENT_YEAR,
+    ORG_YEAR,
   } = useContext(ACOContext);
 
   const [sortCol, setSortCol] = useState("aco_name");
@@ -29,8 +30,11 @@ export default function Table() {
   const [filterMinPanel, setFilterMinPanel] = useState("");
   const [filterMaxPanel, setFilterMaxPanel] = useState("");
   const [filterMinQual, setFilterMinQual] = useState("");
+  const [filterMinPriority, setFilterMinPriority] = useState("");
   const [filterSavingsOnly, setFilterSavingsOnly] = useState(false);
   const [filterLossOnly, setFilterLossOnly] = useState(false);
+  const [filterReachOnly, setFilterReachOnly] = useState(false);
+  const [filterHighChurn, setFilterHighChurn] = useState(false);
   const [includeNoPerf, setIncludeNoPerf] = useState(true);
   const [nameSearch, setNameSearch] = useState("");
 
@@ -51,15 +55,19 @@ export default function Table() {
     if (filterMinPanel) list = list.filter((a) => a.panel >= parseInt(filterMinPanel));
     if (filterMaxPanel) list = list.filter((a) => a.panel <= parseInt(filterMaxPanel));
     if (filterMinQual) list = list.filter((a) => a.qualScore >= parseFloat(filterMinQual));
+    if (filterMinPriority) list = list.filter((a) => a.salesPriority >= parseInt(filterMinPriority));
     if (filterSavingsOnly) list = list.filter((a) => a.savings > 0);
     if (filterLossOnly) list = list.filter((a) => a.savings < 0);
+    if (filterReachOnly) list = list.filter((a) => a.isReach);
+    if (filterHighChurn) list = list.filter((a) => a.churnRate >= 20);
     if (!includeNoPerf) list = list.filter((a) => a.hasPerformanceData);
 
     return list;
   }, [
     acos, nameSearch, filterState, filterRiskModel, filterMethod,
-    filterMinPanel, filterMaxPanel, filterMinQual,
-    filterSavingsOnly, filterLossOnly, includeNoPerf,
+    filterMinPanel, filterMaxPanel, filterMinQual, filterMinPriority,
+    filterSavingsOnly, filterLossOnly, filterReachOnly, filterHighChurn,
+    includeNoPerf,
   ]);
 
   const sorted = useMemo(() => {
@@ -89,6 +97,12 @@ export default function Table() {
           break;
         case "memberCount":
           cmp = (a.memberCount || 0) - (b.memberCount || 0);
+          break;
+        case "salesPriority":
+          cmp = (a.salesPriority || 0) - (b.salesPriority || 0);
+          break;
+        case "churnRate":
+          cmp = (a.churnRate || 0) - (b.churnRate || 0);
           break;
         default:
           cmp = 0;
@@ -129,8 +143,11 @@ export default function Table() {
     setFilterMinPanel("");
     setFilterMaxPanel("");
     setFilterMinQual("");
+    setFilterMinPriority("");
     setFilterSavingsOnly(false);
     setFilterLossOnly(false);
+    setFilterReachOnly(false);
+    setFilterHighChurn(false);
     setIncludeNoPerf(true);
     setNameSearch("");
     setPage(0);
@@ -157,7 +174,7 @@ export default function Table() {
       {/* Header */}
       <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-secondary">
-          {CURRENT_YEAR} ACOs ({filtered.length})
+          {ORG_YEAR} MSSP ACOs ({filtered.length})
         </h1>
         <div className="flex gap-2">
           <button
@@ -169,7 +186,7 @@ export default function Table() {
           <button
             className="btn btn-sm btn-outline btn-success"
             onClick={() =>
-              exportToCSV(filtered, `aco-data-${CURRENT_YEAR}.csv`)
+              exportToCSV(filtered, `aco-data-${ORG_YEAR}.csv`)
             }
           >
             <FaDownload className="mr-1" /> Export CSV
@@ -241,13 +258,13 @@ export default function Table() {
               />
             </div>
             <div>
-              <label className="label label-text text-xs">Min Quality</label>
+              <label className="label label-text text-xs">Min Priority</label>
               <input
                 type="number"
                 className="input input-bordered input-sm w-full"
                 placeholder="0"
-                value={filterMinQual}
-                onChange={(e) => { setFilterMinQual(e.target.value); setPage(0); }}
+                value={filterMinPriority}
+                onChange={(e) => { setFilterMinPriority(e.target.value); setPage(0); }}
               />
             </div>
           </div>
@@ -273,11 +290,29 @@ export default function Table() {
             <label className="label cursor-pointer gap-2">
               <input
                 type="checkbox"
+                className="checkbox checkbox-sm checkbox-accent"
+                checked={filterReachOnly}
+                onChange={(e) => { setFilterReachOnly(e.target.checked); setPage(0); }}
+              />
+              <span className="label-text text-xs">ACO REACH only</span>
+            </label>
+            <label className="label cursor-pointer gap-2">
+              <input
+                type="checkbox"
+                className="checkbox checkbox-sm checkbox-warning"
+                checked={filterHighChurn}
+                onChange={(e) => { setFilterHighChurn(e.target.checked); setPage(0); }}
+              />
+              <span className="label-text text-xs">High churn (20%+)</span>
+            </label>
+            <label className="label cursor-pointer gap-2">
+              <input
+                type="checkbox"
                 className="checkbox checkbox-sm checkbox-primary"
                 checked={includeNoPerf}
                 onChange={(e) => { setIncludeNoPerf(e.target.checked); setPage(0); }}
               />
-              <span className="label-text text-xs">Include ACOs without performance data</span>
+              <span className="label-text text-xs">Include no-perf ACOs</span>
             </label>
             <button className="btn btn-ghost btn-xs" onClick={clearFilters}>
               Clear All
@@ -309,22 +344,25 @@ export default function Table() {
               <th className="cursor-pointer hover:bg-base-300" onClick={() => handleSort("savings")}>
                 Savings <SortIcon col="savings" />
               </th>
-              <th className="cursor-pointer hover:bg-base-300" onClick={() => handleSort("method")}>
-                Method <SortIcon col="method" />
+              <th className="cursor-pointer hover:bg-base-300" onClick={() => handleSort("salesPriority")}>
+                Priority <SortIcon col="salesPriority" />
+              </th>
+              <th className="cursor-pointer hover:bg-base-300" onClick={() => handleSort("churnRate")}>
+                Churn <SortIcon col="churnRate" />
               </th>
               <th className="cursor-pointer hover:bg-base-300" onClick={() => handleSort("memberCount")}>
                 Members <SortIcon col="memberCount" />
               </th>
-              <th>Website</th>
+              <th>Tags</th>
             </tr>
           </thead>
           <tbody>
-            {pageData.map((aco) => (
-              <tr key={aco.aco_id} className="hover border-b border-base-300">
+            {pageData.map((aco, idx) => (
+              <tr key={`${aco.aco_id}-${page * PAGE_SIZE + idx}`} className="hover border-b border-base-300">
                 <td className="font-mono text-xs">{aco.aco_id}</td>
                 <td>
                   <Link to={`/aco/${aco.aco_id}`} className="link link-primary text-sm">
-                    {cleanAcoName(aco.aco_name, 45)}
+                    {cleanAcoName(aco.aco_name, 40)}
                   </Link>
                 </td>
                 <td>{aco.state}</td>
@@ -343,17 +381,27 @@ export default function Table() {
                     </span>
                   ) : "-"}
                 </td>
-                <td className="text-xs">{aco.method !== "N/A" ? aco.method : "-"}</td>
+                <td className="text-center">
+                  {aco.salesPriority > 0 ? (
+                    <span className={`badge badge-xs ${getSalesPriorityColor(aco.salesPriority)}`}>
+                      {aco.salesPriority}
+                    </span>
+                  ) : "-"}
+                </td>
+                <td className="text-right">
+                  {aco.churnRate > 0 ? (
+                    <span className={aco.churnRate >= 20 ? "text-warning" : ""}>
+                      {aco.churnRate}%
+                    </span>
+                  ) : "-"}
+                </td>
                 <td className="text-right">{aco.memberCount || "-"}</td>
                 <td>
-                  {aco.aco_public_reporting_website && (
-                    <button
-                      className="btn btn-outline btn-xs text-info normal-case"
-                      onClick={() => openInNewTab(aco.aco_public_reporting_website)}
-                    >
-                      Visit
-                    </button>
-                  )}
+                  <div className="flex gap-1">
+                    {aco.isReach && (
+                      <span className="badge badge-xs badge-accent">REACH</span>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

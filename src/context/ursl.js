@@ -19,16 +19,21 @@ export const DATASET_IDS = {
 
 export const CURRENT_YEAR = 2024;
 export const PRIOR_YEAR = 2023;
+export const ORG_YEAR = 2026;
 
 const BASE_URL = "https://data.cms.gov/data-api/v1/dataset";
 
+// CMS API page size limit
+export const CMS_PAGE_SIZE = 5000;
+
 // Build a CMS data API URL
-export function buildCmsUrl(datasetId, { columns, keyword, limit } = {}) {
+export function buildCmsUrl(datasetId, { columns, keyword, limit, offset } = {}) {
   let url = `${BASE_URL}/${datasetId}/data`;
   const params = [];
   if (columns) params.push(`column=${columns}`);
   if (keyword) params.push(`keyword=${keyword}`);
   if (limit) params.push(`size=${limit}`);
+  if (offset) params.push(`offset=${offset}`);
   if (params.length > 0) url += `?${params.join("&")}`;
   return url;
 }
@@ -71,6 +76,15 @@ export const PriorPerformanceUrl = buildCmsUrl(
 export const PriorMemberURL = buildCmsUrl(DATASET_IDS.members[PRIOR_YEAR], {
   columns: MEMBER_COLUMNS,
 });
+
+// Build a paginated member URL
+export function buildMemberPageUrl(year, offset) {
+  return buildCmsUrl(DATASET_IDS.members[year], {
+    columns: MEMBER_COLUMNS,
+    limit: CMS_PAGE_SIZE,
+    offset,
+  });
+}
 
 // Search URL builder
 export function buildSearchUrl(keyword, year = CURRENT_YEAR) {

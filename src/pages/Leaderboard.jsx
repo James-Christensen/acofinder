@@ -2,6 +2,7 @@ import React, { useContext, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import ACOContext from "../context/context";
 import { formatCurrency } from "../utils/helpers";
+import { getSalesPriorityLabel } from "../utils/salesPriority";
 
 export default function Leaderboard() {
   const { acos, loading, error, CURRENT_YEAR } = useContext(ACOContext);
@@ -34,6 +35,9 @@ export default function Leaderboard() {
       case "panel":
         sorted = [...withPerf].sort((a, b) => b.panel - a.panel);
         break;
+      case "salesPriority":
+        sorted = [...withPerf].sort((a, b) => b.salesPriority - a.salesPriority);
+        break;
       default:
         sorted = withPerf;
     }
@@ -53,6 +57,8 @@ export default function Leaderboard() {
         return `${aco.qualScore.toFixed(1)}%`;
       case "panel":
         return aco.panel.toLocaleString();
+      case "salesPriority":
+        return `${aco.salesPriority} — ${getSalesPriorityLabel(aco.salesPriority)}`;
       default:
         return "";
     }
@@ -69,6 +75,8 @@ export default function Leaderboard() {
         return aco.qualScore >= 80 ? "text-success" : aco.qualScore >= 50 ? "text-warning" : "text-error";
       case "qualScoreLow":
         return aco.qualScore < 50 ? "text-error" : aco.qualScore < 80 ? "text-warning" : "text-success";
+      case "salesPriority":
+        return aco.salesPriority >= 75 ? "text-error" : aco.salesPriority >= 50 ? "text-warning" : aco.salesPriority >= 25 ? "text-info" : "";
       default:
         return "";
     }
@@ -93,7 +101,7 @@ export default function Leaderboard() {
   return (
     <div className="container mx-auto max-w-5xl px-2">
       <h1 className="text-2xl font-bold text-secondary mb-4">
-        {CURRENT_YEAR} ACO Leaderboard
+        {CURRENT_YEAR} Performance Leaderboard
       </h1>
 
       {/* Controls */}
@@ -111,6 +119,7 @@ export default function Leaderboard() {
             <option value="qualScore">Quality Score (Highest)</option>
             <option value="qualScoreLow">Quality Score (Lowest)</option>
             <option value="panel">Panel Size (Largest)</option>
+            <option value="salesPriority">Sales Priority Score</option>
           </select>
         </div>
         <div>

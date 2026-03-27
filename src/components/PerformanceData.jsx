@@ -25,7 +25,7 @@ export default function PerformanceData({ performance, currentYear }) {
         />
         <Stat
           title="Generated Savings/Loss"
-          statValue={formatCurrency(performance.genSavings || performance.GenSaveLoss)}
+          statValue={formatCurrency(performance.genSavings)}
           statDesc={performance.genSavings > 0 ? "Generated Savings" : performance.genSavings < 0 ? "Generated Loss" : "Breakeven"}
           icon={
             <FaMoneyCheckAlt className="my-2 text-4xl text-primary-content hover:text-success" />
@@ -33,7 +33,7 @@ export default function PerformanceData({ performance, currentYear }) {
         />
         <Stat
           title="Earned Savings/Loss"
-          statValue={formatCurrency(performance.savings || performance.EarnSaveLoss)}
+          statValue={formatCurrency(performance.savings)}
           statDesc={performance.savings > 0 ? "Earned Savings" : performance.savings < 0 ? "Owed Losses" : "N/A"}
           icon={
             <FaMoneyBill className="my-2 text-4xl text-primary-content hover:text-success" />
@@ -41,7 +41,7 @@ export default function PerformanceData({ performance, currentYear }) {
         />
         <Stat
           title="Quality Score"
-          statValue={`${performance.qualScore || performance.QualScore || "N/A"}${typeof (performance.qualScore || performance.QualScore) === "number" ? "%" : ""}`}
+          statValue={`${performance.qualScore || "N/A"}${typeof performance.qualScore === "number" ? "%" : ""}`}
           statDesc={`${year} Quality Performance`}
           icon={
             <FaChartLine className="text-4xl text-primary-content hover:text-primary" />

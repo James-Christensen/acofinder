@@ -10,8 +10,14 @@ import ProviderComposition from "./ProviderComposition";
 import YearOverYear from "./YearOverYear";
 import NPILookup from "./NPILookup";
 import PenaltyRiskCalculator from "./PenaltyRiskCalculator";
+import BenchmarkPressure from "./BenchmarkPressure";
+import StabilityPanel from "./StabilityPanel";
+import ProviderDirectory from "./ProviderDirectory";
+import HospitalQuality from "./HospitalQuality";
 import { FaUser, FaUserTie, FaUserNurse, FaUserMd, FaCopy, FaCheck } from "react-icons/fa";
-import { openInNewTab, calculateARR } from "../utils/helpers";
+import { openInNewTab, calculateARR, parseNumericString } from "../utils/helpers";
+import { getSalesPriorityLabel, getSalesPriorityColor } from "../utils/salesPriority";
+import { getMAPressureLevel } from "../data/maPenetration";
 
 export default function Org() {
   const { id } = useParams();
@@ -20,10 +26,13 @@ export default function Org() {
     error,
     getAcoById,
     getMembersForAco,
+    getPriorMembersForAco,
     getPriorPerformance,
     toggleBookmark,
     bookmarks,
     CURRENT_YEAR,
+    PRIOR_YEAR,
+    ORG_YEAR,
   } = useContext(ACOContext);
 
   const [activeTab, setActiveTab] = useState("overview");
@@ -31,7 +40,14 @@ export default function Org() {
 
   const aco = useMemo(() => getAcoById(id), [getAcoById, id]);
   const members = useMemo(() => getMembersForAco(id), [getMembersForAco, id]);
-  const priorPerf = useMemo(() => getPriorPerformance(id), [getPriorPerformance, id]);
+  const priorMembers = useMemo(
+    () => getPriorMembersForAco(id),
+    [getPriorMembersForAco, id]
+  );
+  const priorPerf = useMemo(
+    () => getPriorPerformance(id),
+    [getPriorPerformance, id]
+  );
 
   const bookmarked = bookmarks.includes(id);
 
@@ -68,6 +84,7 @@ export default function Org() {
 
   const panel = aco.panel || aco.memberCount * 709;
   const arr = calculateARR(panel);
+  const maPressure = getMAPressureLevel(aco.maPenetration);
 
   const tabs = [
     { id: "overview", label: "Overview" },
@@ -75,6 +92,8 @@ export default function Org() {
     { id: "members", label: `Members (${members.length})` },
     { id: "quality", label: "Quality Measures" },
     { id: "risk", label: "Risk Assessment" },
+    { id: "stability", label: "Stability" },
+    { id: "hospitals", label: "Hospitals" },
   ];
 
   const CopyButton = ({ text, label }) => (
@@ -97,7 +116,9 @@ export default function Org() {
         {/* Header */}
         <div className="flex justify-center items-start gap-3">
           <div>
-            <h1 className="text-4xl lg:text-5xl text-primary font-bold">{aco.aco_name}</h1>
+            <h1 className="text-4xl lg:text-5xl text-primary font-bold">
+              {aco.aco_name}
+            </h1>
             <p className="py-3 text-center">{aco.aco_address}</p>
             <div className="flex justify-center gap-2 flex-wrap">
               <span className="badge badge-info">{aco.aco_id}</span>
@@ -105,12 +126,45 @@ export default function Org() {
                 <span className="badge badge-outline">{aco.Risk_Model}</span>
               )}
               {aco.hasPerformanceData && (
-                <span className={`badge ${aco.savings > 0 ? "badge-success" : aco.savings < 0 ? "badge-error" : "badge-ghost"}`}>
-                  {aco.savings > 0 ? "Earned Savings" : aco.savings < 0 ? "Owes Losses" : "Breakeven"}
+                <span
+                  className={`badge ${
+                    aco.savings > 0
+                      ? "badge-success"
+                      : aco.savings < 0
+                      ? "badge-error"
+                      : "badge-ghost"
+                  }`}
+                >
+                  {aco.savings > 0
+                    ? "Earned Savings"
+                    : aco.savings < 0
+                    ? "Owes Losses"
+                    : "Breakeven"}
+                </span>
+              )}
+              {/* Sales Priority Badge */}
+              {aco.salesPriority > 0 && (
+                <span
+                  className={`badge ${getSalesPriorityColor(aco.salesPriority)}`}
+                >
+                  {getSalesPriorityLabel(aco.salesPriority)} Priority (
+                  {aco.salesPriority})
+                </span>
+              )}
+              {/* ACO REACH Badge */}
+              {aco.isReach && (
+                <span className="badge badge-accent">ACO REACH</span>
+              )}
+              {/* MA Penetration Badge */}
+              {aco.maPenetration && (
+                <span className={`badge badge-outline ${maPressure.color}`}>
+                  MA: {aco.maPenetration}%
                 </span>
               )}
               <button
-                className={`badge cursor-pointer ${bookmarked ? "badge-warning" : "badge-outline"}`}
+                className={`badge cursor-pointer ${
+                  bookmarked ? "badge-warning" : "badge-outline"
+                }`}
                 onClick={() => toggleBookmark(id)}
               >
                 {bookmarked ? "★ Bookmarked" : "☆ Bookmark"}
@@ -127,11 +181,12 @@ export default function Org() {
             arr={arr}
             qualScore={aco.qualScore}
             currentYear={CURRENT_YEAR}
+            orgYear={ORG_YEAR}
           />
         </div>
 
         {/* Tabs */}
-        <div className="tabs tabs-boxed justify-center my-5 bg-base-300">
+        <div className="tabs tabs-boxed justify-center my-5 bg-base-300 flex-wrap">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -193,13 +248,24 @@ export default function Org() {
           <div>
             {aco.hasPerformanceData ? (
               <>
-                <PerformanceData performance={aco} currentYear={CURRENT_YEAR} />
+                <PerformanceData
+                  performance={aco}
+                  currentYear={CURRENT_YEAR}
+                />
+                <BenchmarkPressure aco={aco} priorPerf={priorPerf} />
                 {priorPerf && (
-                  <YearOverYear current={aco} prior={priorPerf} currentYear={CURRENT_YEAR} priorYear={CURRENT_YEAR - 1} />
+                  <YearOverYear
+                    current={aco}
+                    prior={priorPerf}
+                    currentYear={CURRENT_YEAR}
+                    priorYear={CURRENT_YEAR - 1}
+                  />
                 )}
               </>
             ) : (
-              <p className="text-accent py-10">No performance data available for this ACO.</p>
+              <p className="text-accent py-10">
+                No performance data available for this ACO.
+              </p>
             )}
           </div>
         )}
@@ -208,13 +274,19 @@ export default function Org() {
           <div>
             <Members members={members} />
             {members.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-lg font-semibold mb-3">NPI Registry Lookup</h3>
-                <p className="text-sm opacity-60 mb-3">
-                  Search the NPPES registry for provider details on member practices
-                </p>
-                <NPILookup practiceName={members[0]?.par_lbn || ""} />
-              </div>
+              <>
+                <ProviderDirectory members={members} acoId={id} />
+                <div className="mt-6">
+                  <h3 className="text-lg font-semibold mb-3">
+                    NPI Registry Lookup
+                  </h3>
+                  <p className="text-sm opacity-60 mb-3">
+                    Search the NPPES registry for provider details on member
+                    practices
+                  </p>
+                  <NPILookup practiceName={members[0]?.par_lbn || ""} />
+                </div>
+              </>
             )}
           </div>
         )}
@@ -224,7 +296,9 @@ export default function Org() {
             {aco.hasPerformanceData ? (
               <QualityBreakdown aco={aco} />
             ) : (
-              <p className="text-accent py-10">No quality data available for this ACO.</p>
+              <p className="text-accent py-10">
+                No quality data available for this ACO.
+              </p>
             )}
           </div>
         )}
@@ -232,11 +306,28 @@ export default function Org() {
         {activeTab === "risk" && (
           <div>
             {aco.hasPerformanceData ? (
-              <PenaltyRiskCalculator aco={aco} />
+              <PenaltyRiskCalculator aco={aco} priorPerf={priorPerf} />
             ) : (
-              <p className="text-accent py-10">No performance data available for risk assessment.</p>
+              <p className="text-accent py-10">
+                No performance data available for risk assessment.
+              </p>
             )}
           </div>
+        )}
+
+        {activeTab === "stability" && (
+          <StabilityPanel
+            currentMembers={members}
+            priorMembers={priorMembers}
+            currentPanel={aco.panel}
+            priorPanel={priorPerf ? parseNumericString(priorPerf.N_AB) : 0}
+            currentYear={CURRENT_YEAR}
+            priorYear={PRIOR_YEAR}
+          />
+        )}
+
+        {activeTab === "hospitals" && (
+          <HospitalQuality members={members} />
         )}
       </div>
     </div>
